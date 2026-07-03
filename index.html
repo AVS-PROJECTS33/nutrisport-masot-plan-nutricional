@@ -31,6 +31,12 @@
         /* Hide Views */
         .hidden-view { display: none !important; }
 
+        /* ELIMINAR TEXTOS DEL NAVEGADOR (URL, Fecha, Título) */
+        @page {
+            size: A4 portrait;
+            margin: 0mm; 
+        }
+
         @media print {
             body, html, .app-container, .main-content { 
                 height: auto !important; 
@@ -38,6 +44,9 @@
                 background-color: white !important; 
                 display: block !important;
                 padding: 0 !important;
+                margin: 0 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
             .no-print, .sidebar { display: none !important; }
             
@@ -55,24 +64,24 @@
 
             .page-container {
                 box-shadow: none !important;
-                margin: 0 !important;
-                padding: 10mm !important; /* Adjusted for printer margins */
-                max-width: 100% !important;
+                margin: 0 auto !important;
+                padding: 15mm !important; /* Margen interno ya que quitamos el del navegador */
+                max-width: 210mm !important;
                 width: 100% !important;
                 border: none !important;
             }
             .evolution-container, .qr-container {
                 box-shadow: none !important;
-                margin: 0 !important;
-                padding: 10mm !important;
+                margin: 0 auto !important;
+                padding: 15mm !important;
                 width: 100% !important;
-                max-width: 100% !important;
+                max-width: 210mm !important;
             }
             
             /* Salto de página para que Evolución vaya en la página 2 */
             #viewEvolution {
-                page-break-before: always;
-                break-before: page;
+                page-break-before: always !important;
+                break-before: page !important;
             }
 
             [contenteditable="true"]:focus, input:focus, textarea:focus {
@@ -118,9 +127,9 @@
 
             <!-- Buscador de Clientes -->
             <div class="px-5 pt-4 pb-2">
-                <h3 class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">Pacientes</h3>
+                <h3 class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">Clientes</h3>
                 <div class="relative">
-                    <input type="text" id="searchInput" placeholder="Buscar paciente..." class="w-full bg-gray-800 text-white text-sm rounded-md pl-9 pr-3 py-2 outline-none focus:ring-1 focus:ring-[#c92a2a] border border-gray-700 placeholder-gray-500 transition-all">
+                    <input type="text" id="searchInput" placeholder="Buscar cliente..." class="w-full bg-gray-100 text-gray-900 text-sm rounded-md pl-9 pr-3 py-2 outline-none focus:ring-2 focus:ring-[#c92a2a] border border-transparent placeholder-gray-500 transition-all">
                     <svg class="w-4 h-4 text-gray-500 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                 </div>
             </div>
