@@ -1,1 +1,678 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plan Nutricional Personalizado - App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Chart.js para los gráficos de evolución -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        body, html { font-family: 'Open Sans', sans-serif; height: 100%; margin: 0; overflow: hidden; }
+        h1, h2, h3, .font-heading { font-family: 'Montserrat', sans-serif; }
+        
+        /* Auto-expand textareas hide scrollbar */
+        textarea { resize: none; overflow: hidden; }
+        
+        /* Editable elements focus style */
+        [contenteditable="true"]:focus, input:focus, textarea:focus {
+            outline: 2px dashed #fca5a5;
+            background-color: #fffaf0;
+            border-radius: 4px;
+        }
 
+        /* App Layout Styles */
+        .app-container { display: flex; height: 100vh; width: 100vw; background-color: #e5e7eb; }
+        .sidebar { width: 280px; background-color: #111827; display: flex; flex-direction: column; flex-shrink: 0; }
+        .main-content { flex: 1; overflow-y: auto; padding: 2rem; display: flex; flex-direction: column; align-items: center; }
+
+        /* Hide Views */
+        .hidden-view { display: none !important; }
+
+        @media print {
+            body, html, .app-container, .main-content { 
+                height: auto !important; 
+                overflow: visible !important; 
+                background-color: white !important; 
+                display: block !important;
+                padding: 0 !important;
+            }
+            .no-print, .sidebar { display: none !important; }
+            
+            /* Print mode modifiers */
+            .hidden-view { display: none !important; }
+            
+            /* Cuando forzamos imprimir ambas vistas (Plan + Evolución) */
+            body.print-full-pdf #viewDiet,
+            body.print-full-pdf #viewEvolution {
+                display: flex !important;
+            }
+            body.print-full-pdf #viewQR {
+                display: none !important;
+            }
+
+            .page-container {
+                box-shadow: none !important;
+                margin: 0 !important;
+                padding: 10mm !important; /* Adjusted for printer margins */
+                max-width: 100% !important;
+                width: 100% !important;
+                border: none !important;
+            }
+            .evolution-container, .qr-container {
+                box-shadow: none !important;
+                margin: 0 !important;
+                padding: 10mm !important;
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+            
+            /* Salto de página para que Evolución vaya en la página 2 */
+            #viewEvolution {
+                page-break-before: always;
+                break-before: page;
+            }
+
+            [contenteditable="true"]:focus, input:focus, textarea:focus {
+                outline: none !important;
+                background-color: transparent !important;
+            }
+            input::placeholder { color: transparent !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        
+        <!-- SIDEBAR (MENU IZQUIERDO) -->
+        <aside class="sidebar no-print shadow-2xl z-10">
+            <!-- Logo / Brand -->
+            <div class="p-6 border-b border-gray-800 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full border-2 border-[#c92a2a] flex items-center justify-center bg-white">
+                    <svg class="w-5 h-5 text-black" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+                </div>
+                <div>
+                    <h2 class="text-xl font-heading font-extrabold text-white tracking-wide leading-none">NUTRICIÓN</h2>
+                    <h2 class="text-xl font-heading font-extrabold text-[#c92a2a] tracking-wide leading-none">SPORT</h2>
+                </div>
+            </div>
+            
+            <!-- Acciones -->
+            <div class="p-5 border-b border-gray-800 space-y-2.5">
+                <button onclick="window.print()" class="w-full bg-white hover:bg-gray-100 text-black px-4 py-2.5 rounded-md flex items-center justify-center gap-2 font-bold transition-all text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                    Imprimir Vista Actual
+                </button>
+                <button onclick="downloadFullPDF()" class="w-full bg-[#c92a2a] hover:bg-red-700 text-white px-4 py-2.5 rounded-md flex items-center justify-center gap-2 font-bold transition-all text-sm shadow-[0_4px_14px_0_rgba(201,42,42,0.39)]">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    Descargar PDF Completo
+                </button>
+                <button class="w-full bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-md flex items-center justify-center gap-2 font-bold transition-all text-sm border border-gray-600 mt-2">
+                    <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                    Guardar Cambios
+                </button>
+            </div>
+
+            <!-- Buscador de Clientes -->
+            <div class="px-5 pt-4 pb-2">
+                <h3 class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">Pacientes</h3>
+                <div class="relative">
+                    <input type="text" id="searchInput" placeholder="Buscar paciente..." class="w-full bg-gray-800 text-white text-sm rounded-md pl-9 pr-3 py-2 outline-none focus:ring-1 focus:ring-[#c92a2a] border border-gray-700 placeholder-gray-500 transition-all">
+                    <svg class="w-4 h-4 text-gray-500 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+            </div>
+
+            <!-- Lista de Clientes -->
+            <div class="flex-1 overflow-y-auto p-3 custom-scrollbar">
+                <ul id="clientList" class="space-y-1">
+                    <!-- Cliente Activo -->
+                    <li>
+                        <button class="w-full text-left px-3 py-2 rounded-md bg-gray-800 text-[#fca5a5] font-medium text-sm flex items-center gap-3 border-l-2 border-[#c92a2a]">
+                            <div class="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-xs text-white">CI</div>
+                            Cristina Inés
+                        </button>
+                    </li>
+                    <!-- Clientes Mock -->
+                    <li>
+                        <button class="w-full text-left px-3 py-2 rounded-md hover:bg-gray-800 text-gray-300 font-medium text-sm flex items-center gap-3 transition-colors border-l-2 border-transparent hover:border-gray-600">
+                            <div class="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-xs text-white">JP</div>
+                            Juan Pérez
+                        </button>
+                    </li>
+                    <li>
+                        <button class="w-full text-left px-3 py-2 rounded-md hover:bg-gray-800 text-gray-300 font-medium text-sm flex items-center gap-3 transition-colors border-l-2 border-transparent hover:border-gray-600">
+                            <div class="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-xs text-white">MR</div>
+                            María Rodríguez
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            
+            <!-- User Profile Bottom -->
+            <div class="p-4 border-t border-gray-800 flex items-center gap-3 bg-gray-900">
+                <div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-sm font-bold text-white">NM</div>
+                <div class="flex-1">
+                    <p class="text-xs font-bold text-white">Noelia Masot</p>
+                    <p class="text-[10px] text-gray-400">Coach Nutricional</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            
+            <!-- TABS SUPERIORES -->
+            <div class="no-print w-full max-w-[210mm] mb-4 flex justify-between items-center">
+                <h1 class="font-heading font-bold text-xl text-gray-800">Ficha: <span class="text-[#c92a2a]">Cristina Inés</span></h1>
+                
+                <div class="bg-gray-300 p-1 rounded-lg flex gap-1">
+                    <!-- TABS: QR, Plan, Evolución -->
+                    <button id="btnTabQR" onclick="switchTab('qr')" class="px-4 py-1.5 rounded-md text-sm font-bold text-gray-600 hover:text-gray-900 transition-all flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z"></path></svg>
+                        Código QR
+                    </button>
+                    <button id="btnTabDiet" onclick="switchTab('diet')" class="px-4 py-1.5 rounded-md text-sm font-bold bg-white text-gray-900 shadow transition-all flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        Plan Nutricional
+                    </button>
+                    <button id="btnTabEvol" onclick="switchTab('evolution')" class="px-4 py-1.5 rounded-md text-sm font-bold text-gray-600 hover:text-gray-900 transition-all flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
+                        Evolución Gráfica
+                    </button>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- VISTA 0: CÓDIGO QR PARA DESCARGA           -->
+            <!-- ========================================== -->
+            <div id="viewQR" class="qr-container hidden-view bg-white w-full max-w-[210mm] min-h-[500px] p-[10mm] shadow-xl relative box-border flex flex-col items-center justify-center rounded-lg">
+                
+                <div class="text-center mb-8 max-w-md">
+                    <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-200">
+                        <svg class="w-8 h-8 text-[#c92a2a]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                    </div>
+                    <h2 class="font-heading font-bold text-3xl text-gray-900 mb-2">Descargar PDF</h2>
+                    <p class="text-gray-600 font-medium text-sm">Escanea este código con tu teléfono móvil para descargar la última versión del plan nutricional de <span class="font-bold text-[#c92a2a]">Cristina Inés</span>.</p>
+                </div>
+
+                <div class="bg-white p-6 border-4 border-gray-100 shadow-sm rounded-2xl mb-8">
+                    <!-- URL Simulada a través de la API pública de QR -->
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://nutricionsport.app/pdf/cristina-ines" alt="Código QR Descarga" class="w-64 h-64 object-contain">
+                </div>
+
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">NUTRICIÓN SPORT MASOT</p>
+
+            </div>
+
+            <!-- ========================================== -->
+            <!-- VISTA 1: PLAN NUTRICIONAL (El A4 original) -->
+            <!-- ========================================== -->
+            <div id="viewDiet" class="page-container bg-white w-full max-w-[210mm] min-h-[297mm] p-[10mm] shadow-xl relative box-border flex flex-col">
+
+                <!-- HEADER -->
+                <header class="flex items-center gap-5 mb-3 flex-shrink-0">
+                    <div class="w-20 h-20 rounded-full border-[3px] border-black flex items-center justify-center bg-white relative overflow-hidden flex-shrink-0">
+                        <div class="text-center">
+                            <div class="font-heading font-extrabold text-[8px] tracking-tighter leading-none mt-1">NUTRICIÓN</div>
+                            <svg class="w-6 h-6 mx-auto my-0.5 text-black" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+                            <div class="font-heading font-extrabold text-[8px] tracking-tighter leading-none">SPORT</div>
+                        </div>
+                    </div>
+                    <div class="flex-1 border-l-2 border-[#c92a2a] pl-4">
+                        <input type="text" value="NUTRICIÓN MASOT" class="font-heading text-[22px] font-bold text-[#c92a2a] w-full outline-none bg-transparent leading-none mb-1">
+                        <input type="text" value="PLAN NUTRICIONAL PERSONALIZADO" class="font-heading text-[13px] font-bold text-gray-900 w-full outline-none bg-transparent tracking-wide leading-none">
+                    </div>
+                </header>
+
+                <!-- PATIENT INFO -->
+                <section class="border-t-[1.5px] border-b-[1.5px] border-[#c92a2a] py-2 mb-3 flex-shrink-0">
+                    <div class="grid grid-cols-2 gap-4 px-2 text-[12px]">
+                        <div class="grid grid-cols-[70px_1fr] gap-1.5 items-center">
+                            <span class="font-semibold text-gray-700">Nombre:</span>
+                            <input type="text" class="w-full outline-none bg-transparent font-medium" value="Cristina Inés">
+                            <span class="font-semibold text-gray-700">Fecha:</span>
+                            <input type="text" class="w-full outline-none bg-transparent font-medium" value="05/03/2025">
+                            <span class="font-semibold text-gray-700">Teléfono:</span>
+                            <input type="text" class="w-full outline-none bg-transparent font-medium text-gray-500" value="678 958 134" placeholder="(Añadido)">
+                        </div>
+                        <div class="grid grid-cols-[60px_1fr] gap-1.5 items-center">
+                            <span class="font-semibold text-gray-700">Edad:</span>
+                            <input type="text" class="w-full outline-none bg-transparent font-medium" value="37 años">
+                            <span class="font-semibold text-gray-700">Altura:</span>
+                            <input type="text" class="w-full outline-none bg-transparent font-medium" value="169 cm">
+                            <span class="font-semibold text-gray-700">Coach:</span>
+                            <input type="text" class="w-full outline-none bg-transparent font-medium" value="Noelia Masot">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- OBJECTIVE -->
+                <section class="flex items-start gap-4 mb-3 flex-shrink-0">
+                    <div class="bg-black text-white font-heading font-bold text-xs px-4 py-1.5 w-[140px] flex-shrink-0" style="clip-path: polygon(0 0, 100% 0, 85% 100%, 0% 100%);">
+                        OBJETIVO
+                    </div>
+                    <div class="flex-1 pt-0">
+                        <div contenteditable="true" class="font-heading font-bold text-[#c92a2a] uppercase text-xs mb-1 flex items-center gap-2">
+                            <span class="text-black">•</span> RECUPERACIÓN MUSCULAR Y ANÍMICA
+                        </div>
+                        <div contenteditable="true" class="font-semibold text-gray-900 text-[12px] mb-1 ml-3">Alta en proteínas y grasas bajas en carbohidratos</div>
+                        <ul class="list-none pl-3 text-[12px] text-gray-800 font-medium" contenteditable="true">
+                            <li><span class="text-black font-bold mr-1">•</span>4 comidas diarias (sin frutas ni pescados)</li>
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- METRICS -->
+                <section class="mb-3 flex-shrink-0">
+                    <!-- Datos Corporales -->
+                    <div class="border border-gray-300 rounded-sm flex flex-col w-full">
+                        <div class="bg-black text-white font-heading font-semibold text-[10px] px-2 py-1 uppercase tracking-wide">DATOS CORPORALES ACTUALES</div>
+                        <div class="p-2 text-[11px] grid grid-cols-3 gap-x-6 gap-y-1 bg-white">
+                            <div class="flex justify-between border-b border-gray-100 pb-0.5"><span class="text-gray-700 font-medium">Peso actual</span><input type="text" class="text-right outline-none w-16 font-semibold" value="56,4 kg"></div>
+                            <div class="flex justify-between border-b border-gray-100 pb-0.5"><span class="text-gray-700 font-medium">% Músculo</span><input type="text" class="text-right outline-none w-16 font-semibold" value="34,3 %"></div>
+                            <div class="flex justify-between border-b border-gray-100 pb-0.5"><span class="text-gray-700 font-medium">Cintura / Cadera</span><input type="text" class="text-right outline-none w-20 font-semibold text-[#c92a2a]" value="65 / 95 cm"></div>
+
+                            <div class="flex justify-between border-b border-gray-100 pb-0.5"><span class="text-gray-700 font-medium">Peso objetivo</span><input type="text" class="text-right outline-none w-16 font-semibold" value="56,0 kg"></div>
+                            <div class="flex justify-between border-b border-gray-100 pb-0.5"><span class="text-gray-700 font-medium">IMC</span><input type="text" class="text-right outline-none w-16 font-semibold" value="19,8"></div>
+                            <div class="flex justify-between border-b border-gray-100 pb-0.5"><span class="text-gray-700 font-medium">Pecho / Pierna</span><input type="text" class="text-right outline-none w-20 font-semibold text-[#c92a2a]" value="99 / 45 cm"></div>
+
+                            <div class="flex justify-between border-b border-gray-100 pb-0.5"><span class="text-gray-700 font-medium">% Grasa</span><input type="text" class="text-right outline-none w-16 font-semibold" value="20,5 %"></div>
+                            <div class="flex justify-between border-b border-gray-100 pb-0.5"><span class="text-gray-700 font-medium">Índice grasa</span><input type="text" class="text-right outline-none w-16 font-semibold" value="20,5 %"></div>
+                            <div class="flex justify-between border-b border-gray-100 pb-0.5"><span class="text-gray-700 font-medium">Contorno Brazo</span><input type="text" class="text-right outline-none w-20 font-semibold text-[#c92a2a]" value="25 cm"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- MEALS SECTION -->
+                <section class="border border-gray-300 rounded-sm mb-3 bg-white flex-1 flex flex-col">
+                    <div class="flex flex-col divide-y divide-gray-300 flex-1">
+                        
+                        <!-- 1: Desayuno -->
+                        <div class="flex-1 flex flex-row items-stretch min-h-[75px]">
+                            <div class="w-28 flex-shrink-0 p-2 text-center border-r border-gray-200 flex flex-col justify-center items-center bg-gray-50/50">
+                                <svg class="w-6 h-6 text-gray-800 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2" d="M12 4v1m0 14v1m8-8h1m-17 0H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-11.314l.707.707m11.314 11.314l-.707-.707M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                <input type="text" class="font-heading font-bold text-[#c92a2a] text-[12px] uppercase text-center w-full outline-none bg-transparent" value="DESAYUNO">
+                                <input type="text" class="font-semibold text-gray-500 text-[10px] text-center w-full outline-none bg-transparent mt-0.5" value="08:00 h" placeholder="Hora">
+                            </div>
+                            <div class="p-3 text-[11.5px] flex-1 flex flex-col justify-center">
+                                <div contenteditable="true" class="outline-none font-medium text-gray-800 leading-[1.6]">
+                                    <p>1 huevo entero &nbsp;•&nbsp; 100 g fiambre de pavo &nbsp;•&nbsp; 1 lata y media de atún al natural (90 g)</p>
+                                    <p class="mt-1">140 g carne de pollo &nbsp;•&nbsp; 50 g pan integral</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2: Comida -->
+                        <div class="flex-1 flex flex-row items-stretch min-h-[75px]">
+                            <div class="w-28 flex-shrink-0 p-2 text-center border-r border-gray-200 flex flex-col justify-center items-center bg-gray-50/50">
+                                <svg class="w-7 h-7 text-gray-800 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+                                <input type="text" class="font-heading font-bold text-[#c92a2a] text-[12px] uppercase text-center w-full outline-none bg-transparent" value="COMIDA">
+                                <input type="text" class="font-semibold text-gray-500 text-[10px] text-center w-full outline-none bg-transparent mt-0.5" value="14:00 h" placeholder="Hora">
+                            </div>
+                            <div class="p-3 text-[11.5px] flex-1 flex flex-col justify-center">
+                                <div contenteditable="true" class="outline-none font-medium text-gray-800 leading-[1.6]">
+                                    <p>150 g verduras cocidas (calabacín, brócoli, judías verdes) &nbsp;•&nbsp; 10 g aceite de oliva virgen</p>
+                                    <p class="mt-1">150 g patata o 150 g boniato &nbsp;•&nbsp; 200 g carne de pollo</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3: Merienda -->
+                        <div class="flex-1 flex flex-row items-stretch min-h-[75px]">
+                            <div class="w-28 flex-shrink-0 p-2 text-center border-r border-gray-200 flex flex-col justify-center items-center bg-gray-50/50">
+                                <svg class="w-6 h-6 text-gray-800 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                                <input type="text" class="font-heading font-bold text-[#c92a2a] text-[12px] uppercase text-center w-full outline-none bg-transparent" value="MERIENDA">
+                                <input type="text" class="font-semibold text-gray-500 text-[10px] text-center w-full outline-none bg-transparent mt-0.5" value="17:30 h" placeholder="Hora">
+                            </div>
+                            <div class="p-3 text-[11.5px] flex-1 flex flex-col justify-center">
+                                <div contenteditable="true" class="outline-none font-medium text-gray-800 leading-[1.6]">
+                                    <p>• 100 g fiambre de pavo o 100 g lomo embuchado</p>
+                                    <p class="mt-1">• 30 g avellanas o nueces crudas &nbsp;•&nbsp; 100 g aguacate o 35-40 g queso</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 4: Cena -->
+                        <div class="flex-1 flex flex-row items-stretch min-h-[75px]">
+                            <div class="w-28 flex-shrink-0 p-2 text-center border-r border-gray-200 flex flex-col justify-center items-center bg-gray-50/50">
+                                <svg class="w-6 h-6 text-gray-800 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2" d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z" /></svg>
+                                <input type="text" class="font-heading font-bold text-[#c92a2a] text-[12px] uppercase text-center w-full outline-none bg-transparent" value="CENA">
+                                <input type="text" class="font-semibold text-gray-500 text-[10px] text-center w-full outline-none bg-transparent mt-0.5" value="21:00 h" placeholder="Hora">
+                            </div>
+                            <div class="p-3 text-[11.5px] flex-1 flex flex-col justify-center">
+                                <div contenteditable="true" class="outline-none font-medium text-gray-800 leading-[1.6]">
+                                    <p>• Caldo + 100 g verduras cocidas (calabacín, brócoli, verdes, espárragos verdes o blancos)</p>
+                                    <p class="mt-1">• 150 g patata o 150 g boniato &nbsp;•&nbsp; 200 g ternera o 200 g de pollo</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- EXTRAS (Suplementos, Postres, Agua) -->
+                        <div class="grid grid-cols-4 divide-x divide-gray-200 bg-gray-50/80 flex-shrink-0 min-h-[55px]">
+                            <div class="p-2 flex flex-col justify-center items-center text-center">
+                                <input type="text" class="font-heading font-bold text-[#c92a2a] text-[10.5px] uppercase w-full outline-none bg-transparent mb-0.5 text-center" value="SUPLEMENTOS">
+                                <div contenteditable="true" class="outline-none text-[10.5px] text-gray-800 leading-snug font-medium">
+                                    Multivitamínico<br>Vitamina D3 + K2
+                                </div>
+                            </div>
+                            <div class="p-2 flex flex-col justify-center items-center text-center">
+                                <input type="text" class="font-heading font-bold text-[#c92a2a] text-[10.5px] uppercase w-full outline-none bg-transparent mb-0.5 text-center" value="OPCIÓN POSTRE">
+                                <div contenteditable="true" class="outline-none text-[10.5px] text-gray-800 leading-snug font-medium">
+                                    Yogur desnatado 0%<br>Gelatinas sin azúcar
+                                </div>
+                            </div>
+                            <div class="p-2 flex flex-col justify-center items-center text-center">
+                                <input type="text" class="font-heading font-bold text-[#c92a2a] text-[10.5px] uppercase w-full outline-none bg-transparent mb-0.5 text-center" value="AGUA">
+                                <div contenteditable="true" class="outline-none text-[10.5px] text-gray-800 leading-snug font-medium">
+                                    Ingesta de agua<br>2,5 litros diarios
+                                </div>
+                            </div>
+                            <div class="p-2 flex flex-col justify-center items-center text-center">
+                                <input type="text" class="font-heading font-bold text-[#c92a2a] text-[10.5px] uppercase w-full outline-none bg-transparent mb-0.5 text-center" value="POSTRE">
+                                <div contenteditable="true" class="outline-none text-[10.5px] text-gray-800 leading-snug font-medium">
+                                    Gelatinas sin azúcar<br>Yogur desnatado 0%
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </section>
+
+                <!-- BOTTOM ALERTS (Opcionales & Recomendaciones) -->
+                <section class="grid grid-cols-[45%_55%] gap-3 flex-shrink-0">
+                    <div class="border border-gray-200 p-3 rounded-sm bg-white shadow-[0_0_0_1px_rgba(201,42,42,0.1)]">
+                        <input type="text" class="font-heading font-bold text-[#c92a2a] text-[11px] uppercase w-full outline-none bg-transparent mb-1.5" value="SUPLEMENTOS OPCIONALES">
+                        <ul class="list-none space-y-1 text-[11px] text-gray-800 font-medium" contenteditable="true">
+                            <li><span class="text-black font-bold mr-1.5">•</span>Magnesio Bisglicinato (200-400 mg)</li>
+                            <li><span class="text-black font-bold mr-1.5">•</span>Omega 3 (1 a 2 g/día)</li>
+                            <li><span class="text-black font-bold mr-1.5">•</span>Vitamina D3 + K2</li>
+                        </ul>
+                    </div>
+                    <div class="border border-gray-200 p-3 rounded-sm bg-[#fafafa]">
+                        <input type="text" class="font-heading font-bold text-[#c92a2a] text-[11px] uppercase w-full outline-none bg-transparent mb-1.5" value="RECOMENDACIONES">
+                        <ul class="list-none space-y-1 text-[11px] text-gray-800 font-medium" contenteditable="true">
+                            <li><span class="text-black font-bold mr-1.5">•</span>Pesar siempre los alimentos cocinados</li>
+                            <li><span class="text-black font-bold mr-1.5">•</span>Beber mínimo 2,5 litros de agua al día</li>
+                            <li><span class="text-black font-bold mr-1.5">•</span>Evitar ultraprocesados y azúcares añadidos</li>
+                            <li><span class="text-black font-bold mr-1.5">•</span>Dormir 7-8 horas diarias</li>
+                            <li><span class="text-black font-bold mr-1.5">•</span>Caminar mínimo 8.000 pasos al día</li>
+                        </ul>
+                    </div>
+                </section>
+
+            </div>
+
+            <!-- ========================================== -->
+            <!-- VISTA 2: EVOLUCIÓN GRÁFICA (Dashboard)     -->
+            <!-- ========================================== -->
+            <div id="viewEvolution" class="evolution-container hidden-view bg-white w-full max-w-[210mm] p-[10mm] shadow-xl relative box-border flex flex-col rounded-lg">
+                
+                <header class="border-b border-gray-200 pb-4 mb-6">
+                    <h2 class="font-heading font-bold text-2xl text-[#c92a2a]">Evolución del Paciente</h2>
+                    <p class="text-gray-600 font-medium text-sm">Historial de cambios y métricas de <span class="font-bold text-gray-900">Cristina Inés</span></p>
+                </header>
+
+                <!-- Tarjetas de resumen rápido -->
+                <div class="grid grid-cols-4 gap-4 mb-8">
+                    <div class="bg-gray-50 border border-gray-200 p-4 rounded-lg text-center">
+                        <p class="text-xs text-gray-500 font-bold uppercase mb-1">Peso Total Perdido</p>
+                        <p class="text-2xl font-heading font-bold text-green-600">-3.8 kg</p>
+                    </div>
+                    <div class="bg-gray-50 border border-gray-200 p-4 rounded-lg text-center">
+                        <p class="text-xs text-gray-500 font-bold uppercase mb-1">Grasa Reducida</p>
+                        <p class="text-2xl font-heading font-bold text-green-600">-3.5 %</p>
+                    </div>
+                    <div class="bg-gray-50 border border-gray-200 p-4 rounded-lg text-center">
+                        <p class="text-xs text-gray-500 font-bold uppercase mb-1">Cintura</p>
+                        <p class="text-2xl font-heading font-bold text-green-600">-6 cm</p>
+                    </div>
+                    <div class="bg-gray-50 border border-gray-200 p-4 rounded-lg text-center">
+                        <p class="text-xs text-gray-500 font-bold uppercase mb-1">Masa Muscular</p>
+                        <p class="text-2xl font-heading font-bold text-blue-600">+1.2 %</p>
+                    </div>
+                </div>
+
+                <!-- Gráficos -->
+                <div class="grid grid-cols-2 gap-8 mb-8">
+                    <!-- Chart 1: Peso y Grasa -->
+                    <div class="border border-gray-200 rounded-lg p-4 shadow-sm">
+                        <h3 class="font-bold text-sm text-gray-800 mb-4 text-center">Evolución de Peso y Grasa Corporal</h3>
+                        <canvas id="chartPesoGrasa" height="200"></canvas>
+                    </div>
+                    <!-- Chart 2: Medidas -->
+                    <div class="border border-gray-200 rounded-lg p-4 shadow-sm">
+                        <h3 class="font-bold text-sm text-gray-800 mb-4 text-center">Evolución de Medidas (cm)</h3>
+                        <canvas id="chartMedidas" height="200"></canvas>
+                    </div>
+                </div>
+
+                <!-- Tabla de Historial -->
+                <div>
+                    <h3 class="font-bold text-gray-800 mb-3 border-l-4 border-[#c92a2a] pl-2">Historial de Registros</h3>
+                    <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-white uppercase bg-gray-800">
+                                <tr>
+                                    <th class="px-4 py-3">Fecha</th>
+                                    <th class="px-4 py-3">Peso</th>
+                                    <th class="px-4 py-3">% Grasa</th>
+                                    <th class="px-4 py-3">% Músculo</th>
+                                    <th class="px-4 py-3">IMC</th>
+                                    <th class="px-4 py-3">Cintura</th>
+                                    <th class="px-4 py-3">Pecho</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 bg-white">
+                                <!-- Datos Mock (Antiguos a más recientes) -->
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-4 py-3 font-semibold">10/01/2025</td>
+                                    <td class="px-4 py-3">60.2 kg</td>
+                                    <td class="px-4 py-3">24.0 %</td>
+                                    <td class="px-4 py-3">33.1 %</td>
+                                    <td class="px-4 py-3">21.1</td>
+                                    <td class="px-4 py-3">71 cm</td>
+                                    <td class="px-4 py-3">102 cm</td>
+                                </tr>
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-4 py-3 font-semibold">05/02/2025</td>
+                                    <td class="px-4 py-3">58.5 kg</td>
+                                    <td class="px-4 py-3">22.2 %</td>
+                                    <td class="px-4 py-3">33.8 %</td>
+                                    <td class="px-4 py-3">20.5</td>
+                                    <td class="px-4 py-3">68 cm</td>
+                                    <td class="px-4 py-3">100 cm</td>
+                                </tr>
+                                <tr class="bg-red-50/30 hover:bg-red-50/60 font-medium">
+                                    <td class="px-4 py-3 font-bold text-[#c92a2a]">05/03/2025 (Actual)</td>
+                                    <td class="px-4 py-3">56.4 kg</td>
+                                    <td class="px-4 py-3">20.5 %</td>
+                                    <td class="px-4 py-3">34.3 %</td>
+                                    <td class="px-4 py-3">19.8</td>
+                                    <td class="px-4 py-3">65 cm</td>
+                                    <td class="px-4 py-3">99 cm</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts de interactividad y gráficos -->
+    <script>
+        // Búsqueda en Sidebar
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const term = e.target.value.toLowerCase();
+            const items = document.querySelectorAll('#clientList li');
+            
+            items.forEach(item => {
+                const text = item.textContent.toLowerCase();
+                if (text.includes(term)) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+
+        // Lógica para descargar PDF completo (2 páginas)
+        function downloadFullPDF() {
+            // Guardar estado de la vista actual
+            const wasDietActive = !document.getElementById('viewDiet').classList.contains('hidden-view');
+            const wasQRActive = !document.getElementById('viewQR').classList.contains('hidden-view');
+            
+            // Forzar a mostrar ambas vistas un momento (importante para que Chart.js coja las dimensiones antes de imprimir)
+            document.getElementById('viewDiet').classList.remove('hidden-view');
+            document.getElementById('viewEvolution').classList.remove('hidden-view');
+            document.getElementById('viewQR').classList.add('hidden-view');
+            
+            // Asegurarnos de que los gráficos estén pintados
+            renderCharts();
+            
+            // Aplicar la clase que forzará el @media print modificado (Dieta + Evolucion)
+            document.body.classList.add('print-full-pdf');
+            
+            // Un pequeño retraso para que el navegador asimile el CSS de visualización y el Canvas
+            setTimeout(() => {
+                window.print();
+                
+                // Limpiar después de que se cierre el diálogo de impresión
+                setTimeout(() => {
+                    document.body.classList.remove('print-full-pdf');
+                    
+                    // Restaurar la pestaña en la que estábamos
+                    if (wasDietActive) switchTab('diet');
+                    else if (wasQRActive) switchTab('qr');
+                    else switchTab('evolution');
+                }, 100);
+            }, 300);
+        }
+
+        // Lógica de Pestañas (Tabs)
+        function switchTab(tabName) {
+            const viewDiet = document.getElementById('viewDiet');
+            const viewEvolution = document.getElementById('viewEvolution');
+            const viewQR = document.getElementById('viewQR');
+            
+            const btnTabDiet = document.getElementById('btnTabDiet');
+            const btnTabEvol = document.getElementById('btnTabEvol');
+            const btnTabQR = document.getElementById('btnTabQR');
+
+            // Clases de estilo para botones activos e inactivos
+            const activeClass = "px-4 py-1.5 rounded-md text-sm font-bold bg-white text-gray-900 shadow transition-all flex items-center gap-1.5";
+            const inactiveClass = "px-4 py-1.5 rounded-md text-sm font-bold text-gray-600 hover:text-gray-900 transition-all flex items-center gap-1.5";
+
+            // Ocultar todas las vistas
+            viewDiet.classList.add('hidden-view');
+            viewEvolution.classList.add('hidden-view');
+            viewQR.classList.add('hidden-view');
+
+            // Resetear todos los botones a inactivos
+            btnTabDiet.className = inactiveClass;
+            btnTabEvol.className = inactiveClass;
+            btnTabQR.className = inactiveClass;
+
+            // Activar la vista y el botón correspondiente
+            if (tabName === 'diet') {
+                viewDiet.classList.remove('hidden-view');
+                btnTabDiet.className = activeClass;
+            } else if (tabName === 'evolution') {
+                viewEvolution.classList.remove('hidden-view');
+                btnTabEvol.className = activeClass;
+                // Renderizar gráficos si es la primera vez que se abre la pestaña
+                renderCharts();
+            } else if (tabName === 'qr') {
+                viewQR.classList.remove('hidden-view');
+                btnTabQR.className = activeClass;
+            }
+        }
+
+        // Renderizado de Gráficos con Chart.js
+        let chartsRendered = false;
+
+        function renderCharts() {
+            if (chartsRendered) return; // Evitar renderizar múltiples veces
+            
+            // Datos Mock
+            const fechas = ['Ene 2025', 'Feb 2025', 'Mar 2025'];
+            const pesos = [60.2, 58.5, 56.4];
+            const grasas = [24.0, 22.2, 20.5];
+            const cinturas = [71, 68, 65];
+            const pechos = [102, 100, 99];
+
+            // Gráfico 1: Peso y Grasa
+            const ctx1 = document.getElementById('chartPesoGrasa').getContext('2d');
+            new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: fechas,
+                    datasets: [
+                        {
+                            label: 'Peso (kg)',
+                            data: pesos,
+                            borderColor: '#111827', // dark gray
+                            backgroundColor: '#111827',
+                            yAxisID: 'y',
+                            tension: 0.3,
+                            borderWidth: 2
+                        },
+                        {
+                            label: '% Grasa',
+                            data: grasas,
+                            borderColor: '#c92a2a', // red brand
+                            backgroundColor: '#c92a2a',
+                            yAxisID: 'y1',
+                            tension: 0.3,
+                            borderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        y: { type: 'linear', display: true, position: 'left', title: {display: true, text: 'Kg'} },
+                        y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: {display: true, text: '%'} }
+                    }
+                }
+            });
+
+            // Gráfico 2: Medidas
+            const ctx2 = document.getElementById('chartMedidas').getContext('2d');
+            new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: fechas,
+                    datasets: [
+                        {
+                            label: 'Cintura (cm)',
+                            data: cinturas,
+                            backgroundColor: 'rgba(201, 42, 42, 0.7)', // light red
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Pecho (cm)',
+                            data: pechos,
+                            backgroundColor: 'rgba(17, 24, 39, 0.7)', // light dark
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: { min: 50, title: {display: true, text: 'Centímetros (cm)'} }
+                    }
+                }
+            });
+
+            chartsRendered = true;
+        }
+    </script>
+</body>
+</html>
